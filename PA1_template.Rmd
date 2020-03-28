@@ -6,20 +6,220 @@ output:
 ---
 
 
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
 ## Loading and preprocessing the data
 
+```{r packages, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+theme_set(theme_pubr())
 
+```
+
+
+
+```{r load data}
+zipped_file <- "activity.zip"
+if(file.exists(zipped_file)) unzip(zipped_file)
+
+data <- read.csv("activity.csv")
+
+```
 
 ## What is mean total number of steps taken per day?
 
+1. Histogram of the total number of steps taken each day
+
+```{r historgram}
+
+p1 <- data %>%
+  filter(!is.na(steps)) %>%
+  mutate(date = factor(date)) %>%
+  group_by(date) %>%
+  summarise(SumSteps = sum(steps))
+
+plot1 <- ggplot(p1, aes(x=SumSteps)) + 
+  geom_histogram(color="black", fill="blue", bins=20)+
+  ggtitle("Histogram of the total number of steps taken each day")+
+  scale_x_continuous(name="Sum of Steps per Day")+
+  scale_y_continuous(limits=c(0,15))+
+  theme_bw()
+
+plot1
+
+
+```
+
+2. Mean of steps of the total number of steps taken per day
+
+```{r MeanSteps}
+meanp1 <- p1 %>%
+  summarise(MeanSteps = round(mean(SumSteps),1))
+
+meanp1
+```
+
+
+3. Median of the total number of steps taken per day
+
+```{r MedianSteps}
+medianp1 <- p1 %>%
+  summarise(MedianSteps = round(median(SumSteps),1))
+
+medianp1
+```
 
 
 ## What is the average daily activity pattern?
 
+1. Time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r Timeseries plot}
+p2 <- data %>%
+filter(!is.na(steps)) %>%
+group_by(interval) %>%
+summarise(AverageSteps = mean(steps))
+
+
+plot(p2$interval,p2$AverageSteps, type="l", xlab="Interval", ylab="Number of Steps",main="Average Number of Steps per Day by Interval")
+
+```
+
+2. The 5-minute interval that contains the maximum number of steps is:
+
+```{r MaxSteps}
+
+Maxint <- p2[which.max(p2$AverageSteps),]$interval
+
+Maxint
+
+```
 
 
 ## Imputing missing values
 
 
+1. The total number of missing values in the dataset (i.e. the total number of rows with NAs) is:
+
+```{r MissingVals}
+
+sum(!complete.cases(data))
+
+```
+
+
+2. Devise a strategy for filling in all of the missing values in the dataset.
+
+The strategy chosen is the *mean of the 5-minute interval*.
+
+
+```{r FillingNA}
+
+newdata <- data %>%
+  mutate(interval=factor(interval)) %>%
+  group_by(interval) %>%
+  mutate(steps= ifelse(is.na(steps), mean(steps,na.rm = T), steps))
+
+```
+
+
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r New Dataset}
+
+head(newdata)
+
+summary(newdata)
+
+```
+
+
+4. A histogram of the total number of steps taken each day and the mean and median total number of steps taken per day. 
+
+- Histogram (New dataset)
+
+```{r Histogram Newdata}
+
+p3 <- newdata %>%
+  mutate(date = factor(date)) %>%
+  group_by(date) %>%
+  summarise(SumSteps = sum(steps))
+
+plot3 <- ggplot(p3, aes(x=SumSteps)) + 
+  geom_histogram(color="black", fill="red", bins=20)+
+  ggtitle("Histogram of the total number of steps taken each day (New Dataset)")+
+  scale_x_continuous(name="Sum of Steps per Day")+
+    scale_y_continuous(limits=c(0,15))+
+  theme_bw()
+
+plot3
+
+```
+
+- Mean total number of steps taken per day (New dataset)
+
+```{r MeanStepsNew}
+meanp3 <- p3 %>%
+  summarise(MeanSteps = round(mean(SumSteps),1))
+
+meanp3
+```
+
+
+
+- Median total number of steps taken per day (New dataset)
+
+```{r MedianStepsNew}
+medianp3 <- p3 %>%
+  summarise(MedianSteps = round(median(SumSteps),1))
+
+medianp3
+```
+
+
+4. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+
+```{r Comparison}
+
+
+figure <- ggarrange(plot1 + ggtitle(NULL), plot3 + ggtitle(NULL),
+                    labels = c("Missing Cases", "Complete Cases"),
+                    ncol = 2, nrow = 1)
+figure
+
+
+```
+
+- There are differences in the frequencies of steps as the histograms show.
+- The mean of steps per day in the two datasets are idential (mean = 10766.2).
+- The median of steps  per day in the dataset with the complete cases (median of new data set = 10766.2) is slightly higher than the dataset with the missing cases (median of the old data set = 10765).
+
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+
+```{r Diff Act Patterns}
+p4 <- newdata %>%
+  mutate (date = as.Date(date)) %>%
+  mutate(DateDay = weekdays(date)) %>%
+  mutate (DayType = ifelse (DateDay=="Saturday" | DateDay=="Sunday", "Weekend", "Weekday") ) %>%
+  select(-DateDay) %>%
+  group_by(interval, DayType) %>%
+  summarise(AverageSteps = mean(steps))
+
+
+ggplot(p4, aes(x=as.numeric(interval), y=AverageSteps)) + 
+  geom_line(color="deepskyblue")+
+  ggtitle("Average Number of Steps per Day by Interval")+
+  scale_x_continuous(name="Interval")+
+  scale_y_continuous(name="Number of Steps") +
+  theme_bw() +
+facet_wrap(~DayType ,ncol=1, strip.position="top")
+```
+
+Yes, there is a difference in the activity patterns between weekdays and weekends.
